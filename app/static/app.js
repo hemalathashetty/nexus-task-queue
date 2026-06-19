@@ -151,7 +151,18 @@ async function fetchJobs() {
             // Format details/payload info
             let detailsText = '';
             if (job.status === 'SUCCESS') {
-                detailsText = `<span class="success-text">Executed successfully.</span>`;
+                if (job.job_type === 'report' && job.error_message) {
+                    try {
+                        const data = JSON.parse(job.error_message);
+                        detailsText = `<span class="success-text" style="color: #10B981; font-weight: 600;">Report Ready!</span> <a href="${data.download_url}" download class="download-link" style="margin-left: 8px; color: #3B82F6; text-decoration: underline; font-weight: 500;">Download CSV</a>`;
+                    } catch (e) {
+                        detailsText = `<span class="success-text">${job.error_message}</span>`;
+                    }
+                } else if (job.job_type === 'video' && job.error_message) {
+                    detailsText = `<span class="success-text" style="font-size: 0.75rem; display: block; line-height: 1.2;">Backup Done!</span><a href="/static/exports/static_backup.zip" download class="download-link" style="color: #3B82F6; text-decoration: underline; font-weight: 500; font-size: 0.75rem;">Download ZIP Backup</a>`;
+                } else {
+                    detailsText = `<span class="success-text">${job.error_message || 'Executed successfully.'}</span>`;
+                }
             } else if (job.status === 'DEAD' || job.status === 'FAILED' || job.status === 'RETRYING') {
                 detailsText = `<span class="error-text" title="${job.error_message || ''}">${job.error_message || 'Unknown error'}</span>`;
             } else if (job.status === 'RUNNING') {

@@ -28,6 +28,7 @@ app.add_middleware(
 
 # Ensure app directories exist
 os.makedirs("app/static", exist_ok=True)
+os.makedirs("app/static/exports", exist_ok=True)
 os.makedirs("app/templates", exist_ok=True)
 
 # Mount static files and templates

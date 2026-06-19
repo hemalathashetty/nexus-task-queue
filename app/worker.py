@@ -122,6 +122,7 @@ async def process_job(job_id_str: str, worker_name: str) -> None:
             # Success
             job.status = "SUCCESS"
             job.completed_at = datetime.utcnow()
+            job.error_message = str(result) if result else None
             db.commit()
             RedisQueue.remove_from_running(job_id_str)
             logger.info(f"[{worker_name}] [Trace: {trace_id}] Finished successfully. Result: {result}")
