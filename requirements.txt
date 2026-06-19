@@ -1,0 +1,10 @@
+fastapi==0.111.0
+uvicorn==0.30.1
+sqlalchemy==2.0.31
+psycopg2-binary==2.9.9
+redis==5.0.7
+pydantic==2.7.4
+jinja2==3.1.4
+fakeredis==2.23.2
+lupa==2.1
+

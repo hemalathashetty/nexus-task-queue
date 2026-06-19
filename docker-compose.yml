@@ -1,0 +1,122 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: job_scheduler_db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: jobs_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d jobs_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: job_scheduler_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build: .
+    container_name: job_scheduler_api
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    volumes:
+      - .:/workspace
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@db:5432/jobs_db
+      - REDIS_URL=redis://redis:6379/0
+      - VISIBILITY_TIMEOUT=20
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  worker-1:
+    build: .
+    container_name: job_scheduler_worker_1
+    command: python -m app.worker
+    volumes:
+      - .:/workspace
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@db:5432/jobs_db
+      - REDIS_URL=redis://redis:6379/0
+      - WORKER_NAME=worker-1
+      - VISIBILITY_TIMEOUT=20
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  worker-2:
+    build: .
+    container_name: job_scheduler_worker_2
+    command: python -m app.worker
+    volumes:
+      - .:/workspace
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@db:5432/jobs_db
+      - REDIS_URL=redis://redis:6379/0
+      - WORKER_NAME=worker-2
+      - VISIBILITY_TIMEOUT=20
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  scheduler-1:
+    build: .
+    container_name: job_scheduler_scheduler_1
+    command: python -m app.scheduler
+    volumes:
+      - .:/workspace
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@db:5432/jobs_db
+      - REDIS_URL=redis://redis:6379/0
+      - SCHEDULER_ID=scheduler-1
+      - VISIBILITY_TIMEOUT=20
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  scheduler-2:
+    build: .
+    container_name: job_scheduler_scheduler_2
+    command: python -m app.scheduler
+    volumes:
+      - .:/workspace
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@db:5432/jobs_db
+      - REDIS_URL=redis://redis:6379/0
+      - SCHEDULER_ID=scheduler-2
+      - VISIBILITY_TIMEOUT=20
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
+  redis_data:

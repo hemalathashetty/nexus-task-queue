@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nexus Job Scheduler - Control Panel</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="glow-orbs">
+        <div class="orb orb-1"></div>
+        <div class="orb orb-2"></div>
+        <div class="orb orb-3"></div>
+    </div>
+    
+    <div class="dashboard-wrapper">
+        <!-- Sleek Sidebar -->
+        <aside class="sidebar">
+            <div class="brand">
+                <div class="brand-icon">
+                    <svg viewBox="0 0 24 24" width="24" height="24" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round">
+                        <polygon points="12 2 2 7 12 12 22 7 12 2"></polygon>
+                        <polyline points="2 17 12 22 22 17"></polyline>
+                        <polyline points="2 12 12 17 22 12"></polyline>
+                    </svg>
+                </div>
+                <h2>NEXUS</h2>
+            </div>
+            
+            <nav class="sidebar-nav">
+                <a href="#" class="nav-item active">
+                    <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9"></rect><rect x="14" y="3" width="7" height="5"></rect><rect x="14" y="12" width="7" height="9"></rect><rect x="3" y="16" width="7" height="5"></rect></svg>
+                    <span>Dashboard</span>
+                </a>
+                <a href="/docs" target="_blank" class="nav-item">
+                    <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+                    <span>API Docs</span>
+                </a>
+            </nav>
+
+            <div class="sidebar-footer">
+                <div class="system-lease">
+                    <div class="lease-header">
+                        <span class="lease-dot"></span>
+                        <span id="active-leader">Leader: Resolving...</span>
+                    </div>
+                    <span class="lease-sub">Active Scheduler Daemon</span>
+                </div>
+                <button id="seed-btn" class="btn seed-btn">
+                    <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>
+                    Seed Simulation
+                </button>
+            </div>
+        </aside>
+
+        <!-- Main Dashboard View -->
+        <main class="main-content">
+            <header class="top-bar">
+                <div class="welcome-text">
+                    <h1>Task Control Center</h1>
+                    <p class="subtitle">Distributed execution log and performance monitor</p>
+                </div>
+                <div class="broker-status">
+                    <div class="indicator success">
+                        <span class="status-dot"></span>
+                        <span id="active-broker">Redis Broker: Connected</span>
+                    </div>
+                </div>
+            </header>
+
+            <!-- Stats Bar -->
+            <section class="stats-grid">
+                <div class="stat-card total">
+                    <div class="stat-header">
+                        <span class="stat-label">Total Jobs</span>
+                        <div class="stat-icon gray">
+                            <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
+                        </div>
+                    </div>
+                    <span class="stat-value" id="stat-total">0</span>
+                </div>
+                
+                <div class="stat-card pending">
+                    <div class="stat-header">
+                        <span class="stat-label">Pending</span>
+                        <div class="stat-icon blue">
+                            <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                        </div>
+                    </div>
+                    <span class="stat-value" id="stat-pending">0</span>
+                </div>
+
+                <div class="stat-card running">
+                    <div class="stat-header">
+                        <span class="stat-label">Running</span>
+                        <div class="stat-icon orange">
+                            <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"></path></svg>
+                        </div>
+                    </div>
+                    <span class="stat-value" id="stat-running">0</span>
+                </div>
+
+                <div class="stat-card retrying">
+                    <div class="stat-header">
+                        <span class="stat-label">Retrying</span>
+                        <div class="stat-icon purple">
+                            <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none"><path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
+                        </div>
+                    </div>
+                    <span class="stat-value" id="stat-retrying">0</span>
+                </div>
+
+                <div class="stat-card success">
+                    <div class="stat-header">
+                        <span class="stat-label">Success</span>
+                        <div class="stat-icon green">
+                            <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+                        </div>
+                    </div>
+                    <span class="stat-value" id="stat-success">0</span>
+                </div>
+
+                <div class="stat-card dead">
+                    <div class="stat-header">
+                        <span class="stat-label">Dead (DLQ)</span>
+                        <div class="stat-icon red">
+                            <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none"><polygon points="7.86 2 16.14 2 22 7.86 22 16.14 16.14 22 7.86 22 2 16.14 2 7.86 7.86 2"></polygon><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+                        </div>
+                    </div>
+                    <span class="stat-value" id="stat-dead">0</span>
+                </div>
+            </section>
+
+            <!-- Workspace Section -->
+            <div class="workspace-grid">
+                <!-- Left Panel: Job Submission -->
+                <section class="card panel-submission">
+                    <div class="card-header">
+                        <h3>Enqueue Task</h3>
+                        <span class="badge">Producer</span>
+                    </div>
+                    <form id="job-form">
+                        <div class="form-group">
+                            <label for="job_type">Job Type</label>
+                            <div class="select-wrapper">
+                                <select id="job_type" required>
+                                    <option value="email">Email Notification</option>
+                                    <option value="video">Video Processing</option>
+                                    <option value="report">PDF Business Report</option>
+                                    <option value="fail_task">Always-Fail Task (Test DLQ)</option>
+                                </select>
+                            </div>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="priority">Priority Score <span class="help-label">(Higher executes first)</span></label>
+                            <input type="number" id="priority" value="0" min="-100" max="100">
+                        </div>
+
+                        <div class="form-group">
+                            <label for="payload">Parameters (JSON Format)</label>
+                            <div class="code-editor-container">
+                                <textarea id="payload" rows="5">{"to": "user@example.com", "subject": "Nexus Notification"}</textarea>
+                            </div>
+                        </div>
+
+                        <button type="submit" class="btn primary-btn">
+                            <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                            Dispatch Job
+                        </button>
+                    </form>
+                </section>
+
+                <!-- Right Panel: Live Queue Monitor -->
+                <section class="card panel-monitor">
+                    <div class="card-header">
+                        <div class="title-section">
+                            <h3>Live Engine Log</h3>
+                            <span class="badge active-badge" id="refresh-badge">Auto-refreshing</span>
+                        </div>
+                        
+                        <div class="filters">
+                            <button class="filter-btn active" data-status="all">All</button>
+                            <button class="filter-btn" data-status="pending">Pending</button>
+                            <button class="filter-btn" data-status="running">Running</button>
+                            <button class="filter-btn" data-status="retrying">Retrying</button>
+                            <button class="filter-btn" data-status="success">Success</button>
+                            <button class="filter-btn" data-status="dead">Dead</button>
+                        </div>
+                    </div>
+
+                    <div class="table-outer">
+                        <table id="jobs-table">
+                            <thead>
+                                <tr>
+                                    <th>Job ID</th>
+                                    <th>Task Type</th>
+                                    <th>Priority</th>
+                                    <th>Status</th>
+                                    <th>Retries</th>
+                                    <th>Worker</th>
+                                    <th>Console Log / Output</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="jobs-tbody">
+                                <tr>
+                                    <td colspan="8" class="empty-state">No jobs found in queue. Use 'Seed Simulation' in sidebar.</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+            </div>
+        </main>
+    </div>
+
+    <!-- Toast Notification System -->
+    <div class="toast-container" id="toast-container"></div>
+    
+    <script src="/static/app.js"></script>
+</body>
+</html>
