@@ -14,6 +14,8 @@ const statsElements = {
 
 const jobForm = document.getElementById('job-form');
 const seedBtn = document.getElementById('seed-btn');
+const redriveBtn = document.getElementById('redrive-btn');
+const delaySecondsInput = document.getElementById('delay_seconds');
 const jobsTbody = document.getElementById('jobs-tbody');
 const filterBtns = document.querySelectorAll('.filter-btn');
 const payloadTextarea = document.getElementById('payload');
@@ -137,7 +139,7 @@ async function fetchJobs() {
         if (jobs.length === 0) {
             jobsTbody.innerHTML = `
                 <tr>
-                    <td colspan="8" class="empty-state">No jobs found under status '${activeFilter}'.</td>
+                    <td colspan="9" class="empty-state">No jobs found under status '${activeFilter}'.</td>
                 </tr>
             `;
             return;
@@ -154,6 +156,13 @@ async function fetchJobs() {
                 detailsText = `<span class="error-text" title="${job.error_message || ''}">${job.error_message || 'Unknown error'}</span>`;
             } else if (job.status === 'RUNNING') {
                 detailsText = `<span class="mono" style="color: var(--color-orange)">Processing steps...</span>`;
+            } else if (job.status === 'PENDING' && job.run_at) {
+                const runAtTime = new Date(job.run_at);
+                if (runAtTime > new Date()) {
+                    detailsText = `<span class="mono" style="color: var(--color-purple)">Delayed until ${runAtTime.toLocaleTimeString()}</span>`;
+                } else {
+                    detailsText = `<span class="mono" style="font-size: 0.75rem">${JSON.stringify(job.payload)}</span>`;
+                }
             } else {
                 detailsText = `<span class="mono" style="font-size: 0.75rem">${JSON.stringify(job.payload)}</span>`;
             }
@@ -164,11 +173,13 @@ async function fetchJobs() {
                 ? `<button class="action-btn" onclick="cancelJob('${job.id}')">Cancel</button>` 
                 : `<span class="mono" style="opacity: 0.5">-</span>`;
 
-            // Shorten ID for UX
+            // Shorten ID and Trace ID for UX
             const shortId = job.id.substring(0, 8);
+            const shortTraceId = job.trace_id ? job.trace_id.substring(0, 8) : '-';
 
             tr.innerHTML = `
                 <td class="mono" title="${job.id}">${shortId}...</td>
+                <td class="mono" title="${job.trace_id || ''}">${shortTraceId}</td>
                 <td style="font-weight: 600; text-transform: capitalize;">${job.job_type}</td>
                 <td class="mono" style="font-weight: bold; color: ${job.priority > 0 ? 'var(--color-orange)' : 'inherit'}">${job.priority}</td>
                 <td><span class="status-pill ${job.status.toLowerCase()}">${job.status}</span></td>
@@ -209,6 +220,7 @@ jobForm.addEventListener('submit', async (e) => {
     e.preventDefault();
     const jobType = document.getElementById('job_type').value;
     const priority = parseInt(document.getElementById('priority').value, 10);
+    const delaySecondsVal = delaySecondsInput ? parseInt(delaySecondsInput.value, 10) : 0;
     const payloadStr = payloadTextarea.value;
     
     let payload = {};
@@ -220,24 +232,34 @@ jobForm.addEventListener('submit', async (e) => {
     }
 
     try {
+        const reqData = {
+            job_type: jobType,
+            priority: priority,
+            payload: payload
+        };
+        if (delaySecondsVal > 0) {
+            reqData.delay_seconds = delaySecondsVal;
+        }
+
         const res = await fetch('/api/jobs', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                job_type: jobType,
-                priority: priority,
-                payload: payload
-            })
+            body: JSON.stringify(reqData)
         });
 
         if (!res.ok) {
             const errData = await res.json();
+            if (res.status === 429) {
+                showToast(`⚠️ Load Shedding: ${errData.detail || "Queue capacity limit reached (50 pending tasks). Please try again later."}`, 'error');
+                return;
+            }
             throw new Error(errData.detail || "Failed to enqueue job");
         }
 
         // Reset form slightly
         document.getElementById('priority').value = '0';
-        showToast("New job dispatched to the pending queue.", 'success');
+        if (delaySecondsInput) delaySecondsInput.value = '0';
+        showToast("New job dispatched successfully.", 'success');
         
         // Refresh UI
         fetchStats();
@@ -269,6 +291,30 @@ seedBtn.addEventListener('click', async () => {
         `;
     }
 });
+
+// DLQ Redrive Button
+if (redriveBtn) {
+    redriveBtn.addEventListener('click', async () => {
+        redriveBtn.disabled = true;
+        redriveBtn.textContent = "Redriving...";
+        try {
+            const res = await fetch('/api/jobs/redrive-dlq', { method: 'POST' });
+            if (!res.ok) throw new Error("Failed to redrive dead jobs");
+            const data = await res.json();
+            showToast(data.message || "DLQ jobs successfully redriven.", 'success');
+            fetchStats();
+            fetchJobs();
+        } catch (err) {
+            showToast(`Redrive failed: ${err.message}`, 'error');
+        } finally {
+            redriveBtn.disabled = false;
+            redriveBtn.innerHTML = `
+                <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
+                Re-drive DLQ
+            `;
+        }
+    });
+}
 
 // Initialize & Set Loop Intervals
 fetchStats();

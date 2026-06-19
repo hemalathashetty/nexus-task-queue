@@ -53,6 +53,10 @@
                     <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>
                     Seed Simulation
                 </button>
+                <button id="redrive-btn" class="btn redrive-btn" style="margin-top: 8px;">
+                    <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
+                    Re-drive DLQ
+                </button>
             </div>
         </aside>
 
@@ -159,6 +163,11 @@
                             <label for="priority">Priority Score <span class="help-label">(Higher executes first)</span></label>
                             <input type="number" id="priority" value="0" min="-100" max="100">
                         </div>
+                        
+                        <div class="form-group">
+                            <label for="delay_seconds">Delay <span class="help-label">(Seconds before running)</span></label>
+                            <input type="number" id="delay_seconds" value="0" min="0" max="86400">
+                        </div>
 
                         <div class="form-group">
                             <label for="payload">Parameters (JSON Format)</label>
@@ -197,6 +206,7 @@
                             <thead>
                                 <tr>
                                     <th>Job ID</th>
+                                    <th>Trace ID</th>
                                     <th>Task Type</th>
                                     <th>Priority</th>
                                     <th>Status</th>
@@ -208,7 +218,7 @@
                             </thead>
                             <tbody id="jobs-tbody">
                                 <tr>
-                                    <td colspan="8" class="empty-state">No jobs found in queue. Use 'Seed Simulation' in sidebar.</td>
+                                    <td colspan="9" class="empty-state">No jobs found in queue. Use 'Seed Simulation' in sidebar.</td>
                                 </tr>
                             </tbody>
                         </table>

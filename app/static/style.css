@@ -502,6 +502,18 @@ select:focus, input:focus, textarea:focus {
     transform: translateY(-2px);
 }
 
+.redrive-btn {
+    background-color: rgba(239, 68, 68, 0.1);
+    border: 1px solid rgba(239, 68, 68, 0.2);
+    color: var(--color-red);
+}
+
+.redrive-btn:hover {
+    background-color: rgba(239, 68, 68, 0.2);
+    border-color: rgba(239, 68, 68, 0.4);
+    transform: translateY(-2px);
+}
+
 /* Live monitor table panel */
 .panel-monitor {
     padding: 1.8rem 2.2rem;

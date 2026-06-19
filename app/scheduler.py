@@ -79,6 +79,23 @@ async def run_janitor_loop() -> None:
                 logger.info(f"Retry job {job.id} status is '{job.status}', removing from retry queue.")
                 RedisQueue.remove_from_retry(job_id_str)
 
+        # --- 3. Check Matured Delayed Jobs ---
+        expired_delayed = RedisQueue.get_expired_delayed_jobs()
+        for job_id_str in expired_delayed:
+            job = db.query(Job).filter(Job.id == job_id_str).first()
+            if not job:
+                logger.warning(f"Orphaned delayed job ID {job_id_str} in Redis. Removing.")
+                RedisQueue.cancel_job(job_id_str)
+                continue
+
+            if job.status == "PENDING":
+                logger.info(f"Delay matured for Job {job.id}. Promoting to active pending queue.")
+                # Move from delayed to pending
+                RedisQueue.move_delayed_to_pending(job_id_str, job.priority)
+            else:
+                logger.info(f"Delayed job {job.id} status is '{job.status}', removing from delayed queue.")
+                RedisQueue.cancel_job(job_id_str)
+
     except Exception as e:
         logger.error(f"Error during scheduler janitor loop: {str(e)}")
         db.rollback()

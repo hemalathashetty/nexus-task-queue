@@ -1,4 +1,6 @@
-from fastapi import APIRouter, Depends, HTTPException, Query, BackgroundTasks
+import logging
+from datetime import datetime, timedelta
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from typing import List, Optional
@@ -11,27 +13,59 @@ from app.schemas import JobCreate, JobResponse, StatsResponse
 from app.redis_client import RedisQueue
 
 router = APIRouter(prefix="/api")
+logger = logging.getLogger("api")
 
 @router.post("/jobs", response_model=JobResponse, status_code=201)
 def create_job(job_in: JobCreate, db: Session = Depends(get_db)):
-    """Creates a new background job and enqueues it."""
-    # 1. Save job metadata to PostgreSQL
+    """Creates a new background job, assigns a trace ID, and enqueues it."""
+    # 1. Backpressure / Load Shedding Check
+    try:
+        queue_sizes = RedisQueue.get_queue_sizes()
+        if queue_sizes["pending"] >= 50:
+            logger.warning(f"[API] [Load Shedding] Pending queue depth is {queue_sizes['pending']}. Rejecting job.")
+            raise HTTPException(
+                status_code=429, 
+                detail="Queue capacity limit reached (50 pending tasks). Please try again later (backpressure)."
+            )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"[API] Failed to check queue capacity: {str(e)}")
+
+    # 2. Setup Trace ID & run_at if delayed
+    trace_id_str = str(uuid.uuid4())
+    run_at = None
+    if job_in.delay_seconds is not None and job_in.delay_seconds > 0:
+        run_at = datetime.utcnow() + timedelta(seconds=job_in.delay_seconds)
+
+    # 3. Save job metadata to SQLite
     db_job = Job(
         job_type=job_in.job_type,
         status="PENDING",
         priority=job_in.priority,
         max_retries=job_in.max_retries,
         payload=job_in.payload,
+        trace_id=trace_id_str,
+        run_at=run_at
     )
     db.add(db_job)
     db.commit()
     db.refresh(db_job)
 
-    # 2. Push job ID to Redis pending ZSET
+    # 4. Push job ID to Redis queue
     try:
-        RedisQueue.push_job(str(db_job.id), db_job.priority)
+        if run_at:
+            # Route to delayed queue ZSET
+            import time
+            run_at_ts = time.time() + job_in.delay_seconds
+            RedisQueue.push_delayed(str(db_job.id), run_at_ts)
+            logger.info(f"[API] [Trace: {trace_id_str}] Enqueued DELAYED Job {db_job.id} (runs in {job_in.delay_seconds}s at {run_at.isoformat()})")
+        else:
+            # Route directly to pending ZSET
+            RedisQueue.push_job(str(db_job.id), db_job.priority)
+            logger.info(f"[API] [Trace: {trace_id_str}] Enqueued IMMEDIATE Job {db_job.id} with priority {db_job.priority}")
     except Exception as e:
-        # Fallback cleanup: If Redis fails, update DB job to FAILED
+        # Fallback cleanup
         db_job.status = "FAILED"
         db_job.error_message = f"Failed to push to Redis queue: {str(e)}"
         db.commit()
@@ -60,7 +94,7 @@ def list_jobs(
 @router.get("/jobs/{job_id}", response_model=JobResponse)
 def get_job(job_id: UUID, db: Session = Depends(get_db)):
     """Retrieves details of a specific job by UUID."""
-    db_job = db.query(Job).filter(Job.id == job_id).first()
+    db_job = db.query(Job).filter(Job.id == str(job_id)).first()
     if not db_job:
         raise HTTPException(status_code=404, detail="Job not found")
     return db_job
@@ -69,7 +103,7 @@ def get_job(job_id: UUID, db: Session = Depends(get_db)):
 @router.post("/jobs/{job_id}/cancel", response_model=JobResponse)
 def cancel_job(job_id: UUID, db: Session = Depends(get_db)):
     """Cancels a pending or retrying job and removes it from the queue."""
-    db_job = db.query(Job).filter(Job.id == job_id).first()
+    db_job = db.query(Job).filter(Job.id == str(job_id)).first()
     if not db_job:
         raise HTTPException(status_code=404, detail="Job not found")
 
@@ -136,12 +170,14 @@ def seed_test_jobs(db: Session = Depends(get_db)):
 
     seeded_ids = []
     for job_data in test_jobs:
+        trace_id_str = str(uuid.uuid4())
         db_job = Job(
             job_type=job_data["job_type"],
             status="PENDING",
             priority=job_data["priority"],
             max_retries=3,
-            payload=job_data["payload"]
+            payload=job_data["payload"],
+            trace_id=trace_id_str
         )
         db.add(db_job)
         db.commit()
@@ -151,3 +187,28 @@ def seed_test_jobs(db: Session = Depends(get_db)):
         seeded_ids.append(str(db_job.id))
 
     return {"message": "Successfully seeded test jobs", "seeded_job_ids": seeded_ids}
+
+
+@router.post("/jobs/redrive-dlq")
+def redrive_dlq(db: Session = Depends(get_db)):
+    """Fetches all DEAD jobs, resets their retries, and pushes them back to the active queue."""
+    dead_jobs = db.query(Job).filter(Job.status == "DEAD").all()
+    
+    redriven_ids = []
+    for job in dead_jobs:
+        # Reset task metadata
+        job.status = "PENDING"
+        job.retry_count = 0
+        job.error_message = None
+        job.worker_name = None
+        job.completed_at = None
+        job.started_at = None
+        
+        # Push back into Redis pending queue
+        RedisQueue.push_job(str(job.id), job.priority)
+        redriven_ids.append(str(job.id))
+        
+        logger.info(f"[API] [Trace: {job.trace_id}] Redriving DEAD Job {job.id} back to PENDING.")
+
+    db.commit()
+    return {"message": f"Successfully redriven {len(redriven_ids)} dead jobs.", "redriven_job_ids": redriven_ids}

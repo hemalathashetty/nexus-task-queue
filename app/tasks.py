@@ -45,9 +45,10 @@ async def execute_report_task(payload: dict) -> str:
     """Simulates generating a business report."""
     report_name = payload.get("report_name", "Q2_sales_report")
     filters = payload.get("filters", {})
+    sleep_seconds = payload.get("sleep_seconds", 3.0)
 
     logger.info(f"Starting Report Generation: {report_name}...")
-    await asyncio.sleep(3.0)  # Simulate database query and formatting
+    await asyncio.sleep(sleep_seconds)  # Simulate database query and formatting
     
     logger.info(f"Report Generation complete: {report_name} saved to storage.")
     return f"Report {report_name} generated successfully with filters {filters}"

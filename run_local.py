@@ -1,5 +1,4 @@
 import asyncio
-import threading
 import uvicorn
 import logging
 import sys
@@ -13,17 +12,10 @@ logging.basicConfig(
     handlers=[logging.StreamHandler(sys.stdout)]
 )
 
-def run_api_server():
-    """Runs the FastAPI uvicorn server in a separate thread."""
-    uvicorn.run("app.main:app", host="127.0.0.1", port=8000, log_level="warning")
-
 async def main():
-    # 1. Start the API/Dashboard Server in a background thread
-    api_thread = threading.Thread(target=run_api_server, daemon=True)
-    api_thread.start()
-    
-    # 2. Wait briefly for uvicorn to initialize
-    await asyncio.sleep(1.5)
+    # 1. Initialize Uvicorn Config and Server inside the same asyncio loop
+    config = uvicorn.Config("app.main:app", host="0.0.0.0", port=8000, log_level="warning")
+    server = uvicorn.Server(config)
     
     print("\n" + "=" * 80)
     print("      NEXUS JOB SCHEDULER - LOCAL TASK ENGINE ACTIVE")
@@ -35,9 +27,10 @@ async def main():
     print("      Press Ctrl+C to stop all services.")
     print("=" * 80 + "\n")
 
-    # 3. Gather background loops in the asyncio event loop
+    # 2. Gather background loops in the asyncio event loop
     try:
         await asyncio.gather(
+            server.serve(),
             worker_loop("worker-1"),
             worker_loop("worker-2"),
             scheduler_loop("scheduler-1"),

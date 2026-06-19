@@ -1,5 +1,6 @@
 import redis
 import time
+import uuid
 from typing import Optional, List
 from app.config import settings
 
@@ -47,12 +48,18 @@ class RedisQueue:
     PENDING_KEY = "queue:pending"
     RUNNING_KEY = "queue:running"
     RETRY_KEY = "queue:retry"
+    DELAYED_KEY = "queue:delayed"
     LEADER_KEY = "scheduler:leader"
 
     @staticmethod
     def push_job(job_id: str, priority: int) -> None:
         """Pushes a job to the pending queue with a priority score."""
         redis_conn.zadd(RedisQueue.PENDING_KEY, {job_id: priority})
+
+    @staticmethod
+    def push_delayed(job_id: str, run_at_timestamp: float) -> None:
+        """Pushes a job to the delayed queue with a scheduled runtime score."""
+        redis_conn.zadd(RedisQueue.DELAYED_KEY, {job_id: run_at_timestamp})
 
     @staticmethod
     def pop_job(visibility_timeout: int) -> Optional[str]:
@@ -86,6 +93,7 @@ class RedisQueue:
         redis_conn.zrem(RedisQueue.PENDING_KEY, job_id)
         redis_conn.zrem(RedisQueue.RUNNING_KEY, job_id)
         redis_conn.zrem(RedisQueue.RETRY_KEY, job_id)
+        redis_conn.zrem(RedisQueue.DELAYED_KEY, job_id)
 
     @staticmethod
     def get_expired_running_jobs() -> List[str]:
@@ -98,6 +106,12 @@ class RedisQueue:
         """Returns job IDs in retry queue whose backoff delay has expired."""
         now = time.time()
         return redis_conn.zrangebyscore(RedisQueue.RETRY_KEY, "-inf", now)
+
+    @staticmethod
+    def get_expired_delayed_jobs() -> List[str]:
+        """Returns job IDs in delayed queue whose run_at timestamp has matured."""
+        now = time.time()
+        return redis_conn.zrangebyscore(RedisQueue.DELAYED_KEY, "-inf", now)
 
     @staticmethod
     def move_running_to_pending(job_id: str, priority: int) -> None:
@@ -116,6 +130,32 @@ class RedisQueue:
         pipe.execute()
 
     @staticmethod
+    def move_delayed_to_pending(job_id: str, priority: int) -> None:
+        """Atomically removes a job from delayed and pushes it back to pending."""
+        pipe = redis_conn.pipeline()
+        pipe.zrem(RedisQueue.DELAYED_KEY, job_id)
+        pipe.zadd(RedisQueue.PENDING_KEY, {job_id: priority})
+        pipe.execute()
+
+    @staticmethod
+    def check_rate_limit(job_type: str, limit: int, window_seconds: int) -> bool:
+        """Verifies if execution is allowed for job_type based on a sliding window rate limit."""
+        now = time.time()
+        key = f"rate_limit:{job_type}"
+        # Clean hits outside the current sliding window
+        redis_conn.zremrangebyscore(key, "-inf", now - window_seconds)
+        
+        # Count remaining hits
+        current_hits = redis_conn.zcard(key)
+        if current_hits < limit:
+            # Record a unique hit using timestamp and UUID
+            hit_member = f"{now}:{uuid.uuid4()}"
+            redis_conn.zadd(key, {hit_member: now})
+            redis_conn.expire(key, window_seconds * 2)
+            return True
+        return False
+
+    @staticmethod
     def acquire_leadership(scheduler_id: str, lease_ms: int) -> bool:
         """Attempts to acquire the leader lock."""
         return bool(redis_conn.set(RedisQueue.LEADER_KEY, scheduler_id, nx=True, px=lease_ms))
@@ -132,9 +172,10 @@ class RedisQueue:
 
     @staticmethod
     def get_queue_sizes() -> dict:
-        """Returns size of pending, running and retry queues."""
+        """Returns size of pending, running, retry, and delayed queues."""
         return {
             "pending": redis_conn.zcard(RedisQueue.PENDING_KEY),
             "running": redis_conn.zcard(RedisQueue.RUNNING_KEY),
-            "retry": redis_conn.zcard(RedisQueue.RETRY_KEY)
+            "retry": redis_conn.zcard(RedisQueue.RETRY_KEY),
+            "delayed": redis_conn.zcard(RedisQueue.DELAYED_KEY)
         }
